@@ -2,7 +2,7 @@ import pool from '../config/database';
 import { Profile } from '../types';
 
 export async function getProfile(userId: string): Promise<Profile | null> {
-  const result = await pool.query('SELECT * FROM profiles WHERE id = $1', [userId]);
+  const result = await pool.query('SELECT * FROM public.profiles WHERE id = $1', [userId]);
   return result.rows.length > 0 ? result.rows[0] : null;
 }
 
@@ -39,7 +39,7 @@ export async function updateProfile(
   values.push(userId);
 
   const query = `
-    UPDATE profiles
+    UPDATE public.profiles
     SET ${fields.join(', ')}
     WHERE id = $${paramIndex}
     RETURNING *
@@ -50,7 +50,7 @@ export async function updateProfile(
 }
 
 export async function getAllProfiles(): Promise<Profile[]> {
-  const result = await pool.query('SELECT * FROM profiles ORDER BY created_at DESC');
+  const result = await pool.query('SELECT * FROM public.profiles ORDER BY created_at DESC');
   return result.rows;
 }
 
@@ -59,18 +59,18 @@ export async function getProfileStats(): Promise<{
   byType: Record<string, number>;
   admins: number;
 }> {
-  const totalResult = await pool.query('SELECT COUNT(*) as count FROM profiles');
+  const totalResult = await pool.query('SELECT COUNT(*) as count FROM public.profiles');
   const total = parseInt(totalResult.rows[0].count);
 
   const typeResult = await pool.query(
-    'SELECT attendee_type, COUNT(*) as count FROM profiles GROUP BY attendee_type'
+    'SELECT attendee_type, COUNT(*) as count FROM public.profiles GROUP BY attendee_type'
   );
   const byType: Record<string, number> = {};
   typeResult.rows.forEach(row => {
     byType[row.attendee_type] = parseInt(row.count);
   });
 
-  const adminResult = await pool.query('SELECT COUNT(*) as count FROM profiles WHERE is_admin = true');
+  const adminResult = await pool.query('SELECT COUNT(*) as count FROM public.profiles WHERE is_admin = true');
   const admins = parseInt(adminResult.rows[0].count);
 
   return { total, byType, admins };
