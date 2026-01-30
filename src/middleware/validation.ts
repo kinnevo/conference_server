@@ -4,7 +4,9 @@ import { body, validationResult } from 'express-validator';
 export const validateRequest = (req: Request, res: Response, next: NextFunction): void => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    res.status(400).json({ error: 'Validation error', details: errors.array() });
+    const arr = errors.array();
+    const firstMsg = arr[0] && 'msg' in arr[0] ? arr[0].msg : 'Validation failed';
+    res.status(400).json({ error: firstMsg, details: arr });
     return;
   }
   next();

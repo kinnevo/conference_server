@@ -22,10 +22,14 @@ const httpServer = createServer(app);
 // CRITICAL: Railway assigns PORT dynamically - always use process.env.PORT
 const PORT = process.env.PORT || 3001;
 
+// CORS: allow comma-separated origins (e.g. "https://client.railway.app,http://localhost:3000")
+const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
+const corsOrigins = corsOrigin.split(',').map((o) => o.trim()).filter(Boolean);
+
 // Socket.IO setup with CORS
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: corsOrigins.length > 1 ? corsOrigins : corsOrigins[0] || 'http://localhost:3000',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
   }
@@ -35,7 +39,7 @@ const io = new Server(httpServer, {
 app.use(helmet());
 app.use(morgan('combined'));
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: corsOrigins.length > 1 ? corsOrigins : corsOrigins[0] || 'http://localhost:3000',
   credentials: true
 }));
 app.use(express.json());

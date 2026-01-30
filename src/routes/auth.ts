@@ -37,7 +37,8 @@ router.post('/register', registerValidation, async (req: Request, res: Response)
       }
     });
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const status = error.message === 'User already exists' ? 409 : 400;
+    res.status(status).json({ error: error.message });
   }
 });
 
