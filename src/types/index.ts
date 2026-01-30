@@ -28,6 +28,15 @@ export interface Area {
   updated_at: Date;
 }
 
+export interface Prompt {
+  id: string;
+  name: string;
+  content: string;
+  description: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
 export interface RefreshToken {
   id: string;
   user_id: string;

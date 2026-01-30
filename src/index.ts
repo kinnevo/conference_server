@@ -11,6 +11,7 @@ import authRoutes from './routes/auth';
 import profileRoutes from './routes/profiles';
 import areaRoutes from './routes/areas';
 import adminRoutes from './routes/admin';
+import promptRoutes from './routes/prompts';
 import { errorHandler } from './middleware/errorHandler';
 import { initializeSocket } from './socket';
 
@@ -62,6 +63,7 @@ app.get('/', (req, res) => {
       profiles: '/api/profiles',
       areas: '/api/areas',
       admin: '/api/admin',
+      prompts: '/api/prompts',
       health: '/health'
     }
   });
@@ -72,6 +74,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/areas', areaRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/prompts', promptRoutes);
 
 // Socket.IO initialization
 initializeSocket(io);
