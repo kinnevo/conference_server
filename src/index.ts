@@ -12,6 +12,8 @@ import profileRoutes from './routes/profiles';
 import areaRoutes from './routes/areas';
 import adminRoutes from './routes/admin';
 import promptRoutes from './routes/prompts';
+import llmProviderRoutes from './routes/llmProviders';
+import signalRoutes from './routes/signals';
 import { errorHandler } from './middleware/errorHandler';
 import { initializeSocket } from './socket';
 
@@ -55,7 +57,7 @@ app.get('/health', (req, res) => {
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    name: 'Conference Registration System API',
+    name: 'SparkBridge API',
     version: '1.0.0',
     status: 'running',
     endpoints: {
@@ -64,6 +66,8 @@ app.get('/', (req, res) => {
       areas: '/api/areas',
       admin: '/api/admin',
       prompts: '/api/prompts',
+      llmProviders: '/api/llm-providers',
+      signals: '/api/signals',
       health: '/health'
     }
   });
@@ -75,6 +79,8 @@ app.use('/api/profiles', profileRoutes);
 app.use('/api/areas', areaRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/prompts', promptRoutes);
+app.use('/api/llm-providers', llmProviderRoutes);
+app.use('/api/signals', signalRoutes);
 
 // Socket.IO initialization
 initializeSocket(io);
