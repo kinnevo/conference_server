@@ -91,4 +91,105 @@ router.post('/validate', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Cluster signals using the active LLM provider
+router.post('/cluster', async (req: AuthRequest, res: Response) => {
+  try {
+    const { signals, selectedField, includeWeak } = req.body;
+
+    if (!signals || !Array.isArray(signals) || signals.length === 0) {
+      res.status(400).json({ error: 'At least one signal is required' });
+      return;
+    }
+
+    // Get active LLM provider
+    const activeProvider = await getActiveProvider();
+    if (!activeProvider || !activeProvider.is_enabled) {
+      res.status(400).json({
+        error: 'No active LLM provider configured. Please configure an LLM provider in Settings.'
+      });
+      return;
+    }
+
+    const provider = await getProviderByIdInternal(activeProvider.id);
+    if (!provider || !provider.api_key_encrypted) {
+      res.status(400).json({ error: 'LLM provider not properly configured' });
+      return;
+    }
+
+    if (provider.name !== 'openai') {
+      res.status(400).json({ error: 'Only OpenAI provider is supported for clustering' });
+      return;
+    }
+
+    // Try DB prompt first, fall back to inline
+    let systemPrompt: string;
+    const dbPrompt = await getPromptByName('cluster_generation');
+    if (dbPrompt) {
+      systemPrompt = dbPrompt.content;
+    } else {
+      systemPrompt = `You are an expert pattern recognition analyst specializing in clustering innovation signals.
+
+Your task: Analyze the provided signals and identify 3-7 distinct clusters of related patterns.
+
+For each cluster, provide a JSON object with:
+{
+  "title": "Short, descriptive cluster name (3-6 words)",
+  "insight": "One crisp paragraph (2-3 sentences) describing what's happening in reality",
+  "strength": "high" | "medium" | "low",
+  "signalIds": ["id1", "id2", ...],
+  "patternTags": ["tag1", "tag2", ...],
+  "opportunityPreview": {
+    "whoIsStruggling": "Brief description of affected users",
+    "desiredOutcome": "What they're trying to achieve",
+    "whatBreaks": "What's not working today",
+    "costOfInaction": "Estimated impact if not addressed"
+  }
+}
+
+Guidelines:
+- Create 3-7 clusters (not more, not less). If fewer than 3 clusters are meaningful, create exactly 3 by grouping loosely related signals.
+- Each signal should belong to exactly one cluster
+- Cluster strength: high = 4+ signals with consistent pattern, medium = 2-3 signals, low = emerging pattern
+- Pattern tags should be specific, not generic (e.g., "Reverts to old workflow" not "User behavior")
+- Insight should be observational, not prescriptive
+- Opportunity preview frames the problem, not the solution
+- CRITICAL: Use the exact signal IDs provided in the input — do not invent or modify them
+
+Return ONLY a valid JSON array of cluster objects, no additional text or markdown formatting.`;
+    }
+
+    // Format signals as user message
+    const signalsText = signals.map((s: any, idx: number) =>
+      `Signal ${idx + 1} (ID: ${s.id}):\nInput: ${s.inputSignal}\nOutcome: ${s.outcome}\nTypes: ${(s.signalTypes || []).join(', ')}\nReasoning: ${(s.reasoning || []).join('; ')}`
+    ).join('\n\n');
+
+    const userMessage = `Field of Interest: ${selectedField || 'All fields'}\nNumber of Signals: ${signals.length}\nInclude Weak Signals: ${includeWeak ? 'Yes' : 'No'}\n\nSignals to cluster:\n${signalsText}\n\nGenerate clusters for these signals.`;
+
+    const OpenAI = require('openai').default;
+    const { getProviderApiKey } = require('../services/llmProviderService');
+
+    const apiKey = getProviderApiKey(provider);
+    const openai = new OpenAI({ apiKey });
+
+    const completion = await openai.chat.completions.create({
+      model: provider.model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage }
+      ],
+      temperature: parseFloat(provider.temperature as any) || 0.7,
+      max_tokens: parseInt(provider.max_tokens as any) || 4000
+    });
+
+    const rawResponse = completion.choices[0]?.message?.content || '';
+
+    res.json({ rawResponse, model: provider.model });
+  } catch (error: any) {
+    console.error('Cluster generation error:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to generate clusters'
+    });
+  }
+});
+
 export default router;
