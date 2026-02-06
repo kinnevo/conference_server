@@ -14,6 +14,9 @@ import adminRoutes from './routes/admin';
 import promptRoutes from './routes/prompts';
 import llmProviderRoutes from './routes/llmProviders';
 import signalRoutes from './routes/signals';
+import clusterRoutes from './routes/clusters';
+import opportunityRoutes from './routes/opportunities';
+import ideaRoutes from './routes/ideas';
 import { errorHandler } from './middleware/errorHandler';
 import { initializeSocket } from './socket';
 
@@ -68,6 +71,9 @@ app.get('/', (req, res) => {
       prompts: '/api/prompts',
       llmProviders: '/api/llm-providers',
       signals: '/api/signals',
+      clusters: '/api/clusters',
+      opportunities: '/api/opportunities',
+      ideas: '/api/ideas',
       health: '/health'
     }
   });
@@ -81,6 +87,9 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/prompts', promptRoutes);
 app.use('/api/llm-providers', llmProviderRoutes);
 app.use('/api/signals', signalRoutes);
+app.use('/api/clusters', clusterRoutes);
+app.use('/api/opportunities', opportunityRoutes);
+app.use('/api/ideas', ideaRoutes);
 
 // Socket.IO initialization
 initializeSocket(io);
