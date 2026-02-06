@@ -1,9 +1,10 @@
 import express, { Response } from 'express';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, requireAdmin } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { getActiveProvider, getProviderByIdInternal } from '../services/llmProviderService';
 import { getPromptByName } from '../services/promptService';
 import { testConnection } from '../services/llm/openaiProvider';
+import { saveSignal, getAllSignals, deleteSignal } from '../services/signalService';
 
 const router = express.Router();
 
@@ -189,6 +190,63 @@ Return ONLY a valid JSON array of cluster objects, no additional text or markdow
     res.status(500).json({
       error: error.message || 'Failed to generate clusters'
     });
+  }
+});
+
+// Get all signals (admin only)
+router.get('/', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const mode = (req.headers['x-signals-mode'] as string) || 'live';
+    const signals = await getAllSignals(mode);
+    res.json(signals);
+  } catch (error: any) {
+    console.error('Get signals error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch signals' });
+  }
+});
+
+// Save or update a signal (any authenticated user)
+router.post('/', async (req: AuthRequest, res: Response) => {
+  try {
+    const mode = (req.headers['x-signals-mode'] as string) || 'live';
+    const { id, sessionId, fieldOfInterest, title, description, qualificationLevel, validationResult } = req.body;
+
+    if (!id) {
+      res.status(400).json({ error: 'Signal id is required' });
+      return;
+    }
+
+    const signal = await saveSignal({
+      id,
+      userId: req.user!.userId,
+      sessionId,
+      fieldOfInterest,
+      title,
+      description,
+      qualificationLevel,
+      validationResult
+    }, mode);
+
+    res.json(signal);
+  } catch (error: any) {
+    console.error('Save signal error:', error);
+    res.status(500).json({ error: error.message || 'Failed to save signal' });
+  }
+});
+
+// Delete a signal (any authenticated user)
+router.delete('/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const mode = (req.headers['x-signals-mode'] as string) || 'live';
+    const deleted = await deleteSignal(req.params.id, mode);
+    if (!deleted) {
+      res.status(404).json({ error: 'Signal not found' });
+      return;
+    }
+    res.status(204).send();
+  } catch (error: any) {
+    console.error('Delete signal error:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete signal' });
   }
 });
 
