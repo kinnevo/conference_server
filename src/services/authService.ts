@@ -9,6 +9,13 @@ const JWT_REFRESH_SECRET: string = process.env.JWT_REFRESH_SECRET || 'your-refre
 const JWT_ACCESS_EXPIRES_IN: string = process.env.JWT_ACCESS_EXPIRES_IN || '15m';
 const JWT_REFRESH_EXPIRES_IN: string = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 
+// Log JWT configuration on module load
+console.log('[AUTH] JWT Configuration:', {
+  accessExpiresIn: JWT_ACCESS_EXPIRES_IN,
+  refreshExpiresIn: JWT_REFRESH_EXPIRES_IN,
+  secretsConfigured: JWT_ACCESS_SECRET.length >= 32 && JWT_REFRESH_SECRET.length >= 32
+});
+
 export async function registerUser(data: RegisterData): Promise<{ user: User; profile: Profile }> {
   const { email, password, firstName, lastName, company, jobTitle, attendeeType } = data;
 
@@ -80,17 +87,24 @@ export async function loginUser(data: LoginData): Promise<{ tokens: TokenPair; u
 export async function generateTokenPair(userId: string, email: string, isAdmin: boolean): Promise<TokenPair> {
   const payload: JwtPayload = { userId, email, isAdmin };
 
+  console.log(`[AUTH] Generating tokens for user ${userId}, expires: ${JWT_ACCESS_EXPIRES_IN} / ${JWT_REFRESH_EXPIRES_IN}`);
+
   const accessToken = jwt.sign(payload, JWT_ACCESS_SECRET, { expiresIn: JWT_ACCESS_EXPIRES_IN } as any);
   const refreshToken = jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: JWT_REFRESH_EXPIRES_IN } as any);
 
   // Store refresh token in database
+  // Parse JWT_REFRESH_EXPIRES_IN to calculate expiration date dynamically
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+  const daysMatch = JWT_REFRESH_EXPIRES_IN.match(/^(\d+)d$/);
+  const daysToAdd = daysMatch ? parseInt(daysMatch[1], 10) : 7;
+  expiresAt.setDate(expiresAt.getDate() + daysToAdd);
 
   await pool.query(
     'INSERT INTO public.refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
     [userId, refreshToken, expiresAt]
   );
+
+  console.log(`[AUTH] Refresh token stored in DB, expires at: ${expiresAt.toISOString()}`);
 
   return { accessToken, refreshToken };
 }
@@ -104,22 +118,41 @@ export function verifyAccessToken(token: string): JwtPayload {
 }
 
 export async function verifyRefreshToken(token: string): Promise<JwtPayload> {
-  try {
-    const payload = jwt.verify(token, JWT_REFRESH_SECRET) as JwtPayload;
+  let payload: JwtPayload;
 
-    // Check if token exists in database and hasn't expired
+  // Step 1: Verify JWT signature and expiration
+  try {
+    payload = jwt.verify(token, JWT_REFRESH_SECRET) as JwtPayload;
+    console.log(`[AUTH] JWT signature valid for user: ${payload.userId}`);
+  } catch (error: any) {
+    console.error(`[AUTH] JWT verification failed:`, error.message);
+    if (error.name === 'TokenExpiredError') {
+      throw new Error('Refresh token has expired');
+    }
+    throw new Error('Invalid refresh token signature');
+  }
+
+  // Step 2: Check database for token
+  try {
+    console.log(`[AUTH] Verifying refresh token for user: ${payload.userId}`);
     const result = await pool.query(
       'SELECT * FROM public.refresh_tokens WHERE token = $1 AND expires_at > NOW()',
       [token]
     );
 
     if (result.rows.length === 0) {
-      throw new Error('Invalid or expired refresh token');
+      console.warn(`[AUTH] Refresh token not found in database for user: ${payload.userId}`);
+      throw new Error('Refresh token has been revoked or expired');
     }
 
+    console.log(`[AUTH] Refresh token verified successfully for user: ${payload.userId}`);
     return payload;
-  } catch (error) {
-    throw new Error('Invalid or expired refresh token');
+  } catch (error: any) {
+    if (error.message.includes('revoked or expired')) {
+      throw error;
+    }
+    console.error(`[AUTH] Database error during token verification:`, error.message);
+    throw new Error('Token verification failed - database error');
   }
 }
 

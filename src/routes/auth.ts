@@ -69,9 +69,11 @@ router.post('/login', loginValidation, async (req: Request, res: Response) => {
 // Refresh access token
 router.post('/refresh', async (req: Request, res: Response) => {
   try {
+    console.log('[AUTH] Refresh token request received at', new Date().toISOString());
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
+      console.warn('[AUTH] Refresh request missing token');
       res.status(400).json({ error: 'Refresh token required' });
       return;
     }
@@ -84,11 +86,16 @@ router.post('/refresh', async (req: Request, res: Response) => {
     // Generate new token pair
     const tokens = await generateTokenPair(payload.userId, payload.email, payload.isAdmin);
 
+    console.log(`[AUTH] Token refresh successful for user: ${payload.userId}`);
     res.json({
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken
     });
   } catch (error: any) {
+    console.error('[AUTH] Token refresh failed:', {
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
     res.status(401).json({ error: error.message });
   }
 });
