@@ -1,10 +1,11 @@
 import express, { Response } from 'express';
-import { authenticateToken, requireAdmin } from '../middleware/auth';
+import { authenticateToken } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { getActiveProvider, getProviderByIdInternal } from '../services/llmProviderService';
 import { getPromptByName } from '../services/promptService';
 import { testConnection } from '../services/llm/openaiProvider';
-import { saveSignal, getAllSignals, deleteSignal } from '../services/signalService';
+import { saveSignal, getAllSignals, getUserSignals, deleteSignal } from '../services/signalService';
+import { getSignalSourceMode } from '../services/systemSettingsService';
 
 const router = express.Router();
 
@@ -193,11 +194,18 @@ Return ONLY a valid JSON array of cluster objects, no additional text or markdow
   }
 });
 
-// Get all signals (admin only)
-router.get('/', requireAdmin, async (req: AuthRequest, res: Response) => {
+// Get signals - admins see all, regular users see only their own
+// Uses global system-wide signal source mode (demo or live)
+router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const mode = (req.headers['x-signals-mode'] as string) || 'live';
-    const signals = await getAllSignals(mode);
+    // Fetch global signal source mode from database
+    const mode = await getSignalSourceMode();
+
+    // Admin users see all signals with user info, regular users see only their own
+    const signals = req.user?.isAdmin
+      ? await getAllSignals(mode)
+      : await getUserSignals(req.user!.userId, mode);
+
     res.json(signals);
   } catch (error: any) {
     console.error('Get signals error:', error);
@@ -208,7 +216,8 @@ router.get('/', requireAdmin, async (req: AuthRequest, res: Response) => {
 // Save or update a signal (any authenticated user)
 router.post('/', async (req: AuthRequest, res: Response) => {
   try {
-    const mode = (req.headers['x-signals-mode'] as string) || 'live';
+    // Fetch global signal source mode from database
+    const mode = await getSignalSourceMode();
     const { id, sessionId, fieldOfInterest, title, description, qualificationLevel, validationResult } = req.body;
 
     if (!id) {
@@ -237,7 +246,8 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 // Delete a signal (any authenticated user)
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const mode = (req.headers['x-signals-mode'] as string) || 'live';
+    // Fetch global signal source mode from database
+    const mode = await getSignalSourceMode();
     const deleted = await deleteSignal(req.params.id, mode);
     if (!deleted) {
       res.status(404).json({ error: 'Signal not found' });

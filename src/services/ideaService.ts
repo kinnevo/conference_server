@@ -8,6 +8,10 @@ export interface IdeaRow {
   result: string;
   created_at: string;
   updated_at: string;
+  // Joined from profiles
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
 }
 
 export async function createIdea(data: {
@@ -35,7 +39,11 @@ export async function getIdeasByOpportunity(opportunityId: string): Promise<Idea
 
 export async function getIdeasByUser(userId: string): Promise<IdeaRow[]> {
   const result = await pool.query(
-    'SELECT * FROM ideas WHERE user_id = $1 ORDER BY created_at DESC',
+    `SELECT i.*, p.first_name, p.last_name, p.email
+     FROM ideas i
+     LEFT JOIN profiles p ON i.user_id = p.id
+     WHERE i.user_id = $1
+     ORDER BY i.created_at DESC`,
     [userId]
   );
   return result.rows;
@@ -43,7 +51,10 @@ export async function getIdeasByUser(userId: string): Promise<IdeaRow[]> {
 
 export async function getAllIdeas(): Promise<IdeaRow[]> {
   const result = await pool.query(
-    'SELECT * FROM ideas ORDER BY created_at DESC'
+    `SELECT i.*, p.first_name, p.last_name, p.email
+     FROM ideas i
+     LEFT JOIN profiles p ON i.user_id = p.id
+     ORDER BY i.created_at DESC`
   );
   return result.rows;
 }

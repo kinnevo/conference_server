@@ -3,13 +3,13 @@ import { authenticateToken } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { getPromptByName } from '../services/promptService';
 import { getActiveProvider, getProviderByIdInternal } from '../services/llmProviderService';
-import { createIdea, getIdeasByOpportunity, getIdeasByUser } from '../services/ideaService';
+import { createIdea, getIdeasByOpportunity, getIdeasByUser, getAllIdeas } from '../services/ideaService';
 
 const router = express.Router();
 
 router.use(authenticateToken);
 
-// Get ideas: by opportunity (query) or for current user
+// Get ideas: by opportunity (query), all ideas (admin), or current user's ideas
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const opportunityId = req.query.opportunityId as string | undefined;
@@ -22,7 +22,12 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-    const ideas = await getIdeasByUser(userId);
+
+    // Admin users see all ideas with author info, regular users see only their own
+    const ideas = req.user?.isAdmin
+      ? await getAllIdeas()
+      : await getIdeasByUser(userId);
+
     res.json(ideas);
   } catch (error: any) {
     console.error('Get ideas error:', error);

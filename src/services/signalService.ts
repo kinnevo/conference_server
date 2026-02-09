@@ -70,6 +70,19 @@ export async function getAllSignals(mode?: string): Promise<SignalRow[]> {
   return result.rows;
 }
 
+export async function getUserSignals(userId: string, mode?: string): Promise<SignalRow[]> {
+  const table = getTable(mode);
+  const result = await pool.query(
+    `SELECT s.*, p.first_name, p.last_name, p.email
+     FROM ${table} s
+     LEFT JOIN profiles p ON s.user_id = p.id
+     WHERE s.user_id = $1
+     ORDER BY s.created_at DESC`,
+    [userId]
+  );
+  return result.rows;
+}
+
 export async function deleteSignal(id: string, mode?: string): Promise<boolean> {
   const table = getTable(mode);
   const result = await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
